@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react'
 import { supabase } from '@/integrations/supabase/client'
-import type { AuthContextType, User, Session, UserProfile } from '@/integrations/supabase/types'
+import type { AuthContextType, User, Session, UserProfile, AuthError } from '@/integrations/supabase/types'
 import { toast } from '@/hooks/use-toast'
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
@@ -51,14 +51,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       return { error }
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'An error occurred'
+    } catch (err) {
+      const error = err instanceof Error ? err : new Error('An unknown error occurred')
       toast({
         title: 'Sign up failed',
-        description: message,
+        description: error.message,
         variant: 'destructive',
       })
-      return { error: error as any }
+      return { error: { message: error.message, status: 500 } as AuthError }
     }
   }
 
@@ -83,14 +83,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       return { error }
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'An error occurred'
+    } catch (err) {
+      const error = err instanceof Error ? err : new Error('An unknown error occurred')
       toast({
         title: 'Sign in failed',
-        description: message,
+        description: error.message,
         variant: 'destructive',
       })
-      return { error: error as any }
+      return { error: { message: error.message, status: 500 } as AuthError }
     }
   }
 
@@ -109,11 +109,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           description: 'You have been signed out successfully.',
         })
       }
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'An error occurred'
+    } catch (err) {
+      const error = err instanceof Error ? err : new Error('An unknown error occurred')
       toast({
         title: 'Sign out failed',
-        description: message,
+        description: error.message,
         variant: 'destructive',
       })
     }
@@ -139,14 +139,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       return { error }
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'An error occurred'
+    } catch (err) {
+      const error = err instanceof Error ? err : new Error('An unknown error occurred')
       toast({
         title: 'Password reset failed',
-        description: message,
+        description: error.message,
         variant: 'destructive',
       })
-      return { error: error as any }
+      return { error: { message: error.message, status: 500 } as AuthError }
     }
   }
 
@@ -175,14 +175,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       })
 
       return { error: null }
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'An error occurred'
+    } catch (err) {
+      const error = err instanceof Error ? err : new Error('An unknown error occurred')
       toast({
         title: 'Profile update failed',
-        description: message,
+        description: error.message,
         variant: 'destructive',
       })
-      return { error: error as Error }
+      return { error }
     }
   }
 

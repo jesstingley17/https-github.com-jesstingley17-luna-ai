@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Eye, EyeOff, Loader2 } from 'lucide-react'
+import { Eye, EyeOff, Loader2, GraduationCap } from 'lucide-react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import * as z from 'zod'
@@ -65,7 +65,7 @@ const Auth: React.FC = () => {
         <CardHeader className="space-y-1">
           <div className="flex items-center justify-center mb-6">
             <div className="w-16 h-16 bg-blue-600 rounded-2xl flex items-center justify-center text-white shadow-xl shadow-blue-100 rotate-3">
-              <i className="fas fa-graduation-cap text-3xl"></i>
+              <GraduationCap className="w-10 h-10" />
             </div>
           </div>
           <CardTitle className="text-2xl font-bold text-center">Welcome to EduGenius</CardTitle>
