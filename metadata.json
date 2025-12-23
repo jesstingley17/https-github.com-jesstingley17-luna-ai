@@ -1,0 +1,9 @@
+{
+  "name": "EduGenius AI - Intelligent Course Architect",
+  "description": "A comprehensive AI-powered platform for generating educational content, interactive quizzes, narrations, and course teaser videos using Gemini 3 and Veo.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone",
+    "geolocation"
+  ]
+}
