@@ -1,9 +1,9 @@
 
 import { GoogleGenAI, Type, Modality, GenerateContentResponse } from "@google/genai";
 
-// Access process.env.API_KEY directly in the client factory to ensure freshness
+// Access import.meta.env.VITE_GEMINI_API_KEY directly in the client factory to ensure freshness
 export const getGeminiClient = () => {
-  return new GoogleGenAI({ apiKey: process.env.API_KEY });
+  return new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY });
 };
 
 /**
@@ -260,7 +260,7 @@ export async function generateCourseTeaser(prompt: string): Promise<string> {
 
   const downloadLink = operation.response?.generatedVideos?.[0]?.video?.uri;
   // Always append the API key from environment when fetching external video resources
-  const videoResponse = await fetch(`${downloadLink}&key=${process.env.API_KEY}`);
+  const videoResponse = await fetch(`${downloadLink}&key=${import.meta.env.VITE_GEMINI_API_KEY}`);
   const blob = await videoResponse.blob();
   return URL.createObjectURL(blob);
 }
