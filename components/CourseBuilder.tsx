@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Course, Module, Lesson, QuizQuestion } from '../types';
 import { 
   generateCourseStructure, 
@@ -20,9 +20,26 @@ const CourseBuilder: React.FC<CourseBuilderProps> = ({ initialCourse, onSave, on
   const [loadingStatus, setLoadingStatus] = useState('');
   const [course, setCourse] = useState<Course | null>(initialCourse || null);
   const [selectedLesson, setSelectedLesson] = useState<{moduleId: string, lessonId: string} | null>(null);
+  const [isListening, setIsListening] = useState<'topic' | 'content' | null>(null);
+  const [lastSaved, setLastSaved] = useState<number | null>(null);
   
   // Track per-lesson generation progress
   const [generatingLessonIds, setGeneratingLessonIds] = useState<Set<string>>(new Set());
+
+  // Load initial topic draft if exists
+  useEffect(() => {
+    if (!course) {
+      const savedTopic = localStorage.getItem('edugenius_topic_draft');
+      if (savedTopic) setTopic(savedTopic);
+    }
+  }, [course]);
+
+  // Topic auto-save
+  useEffect(() => {
+    if (!course && topic) {
+      localStorage.setItem('edugenius_topic_draft', topic);
+    }
+  }, [topic, course]);
 
   // Auto-save mechanism: Sync current course state to localStorage whenever it changes
   useEffect(() => {
@@ -40,8 +57,55 @@ const CourseBuilder: React.FC<CourseBuilderProps> = ({ initialCourse, onSave, on
       }
       
       localStorage.setItem('edugenius_courses', JSON.stringify(coursesList));
+      setLastSaved(Date.now());
+      // Clear topic draft once a course is active
+      localStorage.removeItem('edugenius_topic_draft');
     }
   }, [course]);
+
+  // Voice Input Logic
+  const handleVoiceInput = useCallback((target: 'topic' | 'content') => {
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    
+    if (!SpeechRecognition) {
+      alert("Voice input is not supported in this browser. Please try Chrome or Safari.");
+      return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.lang = 'en-US';
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+
+    recognition.onstart = () => {
+      setIsListening(target);
+    };
+
+    recognition.onresult = (event: any) => {
+      const transcript = event.results[0][0].transcript;
+      if (target === 'topic') {
+        setTopic(prev => prev + (prev ? ' ' : '') + transcript);
+      } else if (target === 'content' && selectedLesson) {
+        const currentModule = course?.modules.find(m => m.id === selectedLesson.moduleId);
+        const currentLesson = currentModule?.lessons.find(l => l.id === selectedLesson.lessonId);
+        if (currentLesson) {
+          const newContent = (currentLesson.content || '') + (currentLesson.content ? ' ' : '') + transcript;
+          updateLessonContent(selectedLesson.moduleId, selectedLesson.lessonId, newContent);
+        }
+      }
+    };
+
+    recognition.onerror = (event: any) => {
+      console.error("Speech recognition error", event.error);
+      setIsListening(null);
+    };
+
+    recognition.onend = () => {
+      setIsListening(null);
+    };
+
+    recognition.start();
+  }, [course, selectedLesson]);
 
   const handleInitialGeneration = async () => {
     if (!topic) return;
@@ -250,7 +314,7 @@ const CourseBuilder: React.FC<CourseBuilderProps> = ({ initialCourse, onSave, on
           <p className="text-lg text-gray-600">Enter a topic and let EduGenius craft a professional curriculum in seconds.</p>
         </div>
         
-        <div className="bg-white p-2 rounded-3xl shadow-2xl border border-gray-100 flex items-center transition-all focus-within:ring-4 focus-within:ring-blue-100">
+        <div className="bg-white p-2 rounded-3xl shadow-2xl border border-gray-100 flex items-center transition-all focus-within:ring-4 focus-within:ring-blue-100 pr-4">
           <input
             type="text"
             placeholder="e.g. Advanced Digital Marketing 2024"
@@ -259,17 +323,28 @@ const CourseBuilder: React.FC<CourseBuilderProps> = ({ initialCourse, onSave, on
             onChange={(e) => setTopic(e.target.value)}
             onKeyPress={(e) => e.key === 'Enter' && handleInitialGeneration()}
           />
-          <button
-            onClick={handleInitialGeneration}
-            disabled={isGenerating || !topic}
-            className="bg-blue-600 hover:bg-blue-700 text-white font-bold px-10 py-5 rounded-2xl transition-all flex items-center gap-3 disabled:opacity-50"
-          >
-            {isGenerating ? (
-              <><i className="fas fa-circle-notch fa-spin"></i> Building Syllabus...</>
-            ) : (
-              <><i className="fas fa-sparkles"></i> Build Course</>
-            )}
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => handleVoiceInput('topic')}
+              className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all ${
+                isListening === 'topic' ? 'bg-red-100 text-red-600 animate-pulse' : 'bg-gray-100 text-gray-400 hover:bg-gray-200'
+              }`}
+              title="Dictate topic"
+            >
+              <i className="fas fa-microphone"></i>
+            </button>
+            <button
+              onClick={handleInitialGeneration}
+              disabled={isGenerating || !topic}
+              className="bg-blue-600 hover:bg-blue-700 text-white font-bold px-10 py-5 rounded-2xl transition-all flex items-center gap-3 disabled:opacity-50 h-14"
+            >
+              {isGenerating ? (
+                <><i className="fas fa-circle-notch fa-spin"></i> Building Syllabus...</>
+              ) : (
+                <><i className="fas fa-sparkles"></i> Build Course</>
+              )}
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -284,15 +359,23 @@ const CourseBuilder: React.FC<CourseBuilderProps> = ({ initialCourse, onSave, on
       {/* Tool Header */}
       <div className="bg-white border-b border-gray-200 px-6 py-4 flex justify-between items-center shrink-0 shadow-sm">
         <div className="flex items-center gap-4">
-          <button onClick={onCancel} className="text-gray-400 hover:text-gray-600"><i className="fas fa-times text-xl"></i></button>
+          <button onClick={onCancel} className="text-gray-400 hover:text-gray-600 transition-colors"><i className="fas fa-times text-xl"></i></button>
           <div className="h-6 w-px bg-gray-200"></div>
           <div className="flex-1">
-            <input 
-              type="text" 
-              value={course.title} 
-              onChange={(e) => setCourse({...course, title: e.target.value})}
-              className="text-lg font-bold text-gray-900 leading-none bg-transparent focus:outline-none focus:ring-1 focus:ring-blue-100 rounded px-1 w-full"
-            />
+            <div className="flex items-center gap-3">
+              <input 
+                type="text" 
+                value={course.title} 
+                onChange={(e) => setCourse({...course, title: e.target.value})}
+                className="text-lg font-bold text-gray-900 leading-none bg-transparent focus:outline-none focus:ring-1 focus:ring-blue-100 rounded px-1 w-full"
+              />
+              {lastSaved && (
+                <div className="flex items-center gap-1.5 text-green-500 shrink-0 transition-opacity animate-in fade-in">
+                  <i className="fas fa-check-circle text-[10px]"></i>
+                  <span className="text-[10px] font-black uppercase tracking-widest">Saved</span>
+                </div>
+              )}
+            </div>
             <span className="text-[10px] font-black text-blue-600 uppercase tracking-widest">Syllabus Editor</span>
           </div>
         </div>
@@ -409,7 +492,7 @@ const CourseBuilder: React.FC<CourseBuilderProps> = ({ initialCourse, onSave, on
                   }}
                   className="text-4xl font-black text-gray-900 mb-4 bg-transparent w-full focus:outline-none focus:ring-1 focus:ring-blue-100 rounded px-1"
                 />
-                <p className="text-gray-500 text-sm">Design and refine your lesson content. You can manually edit or use AI to generate fresh material.</p>
+                <p className="text-gray-500 text-sm font-medium">Auto-save is active. Every edit you make is automatically preserved in your local library.</p>
               </div>
 
               <div className="bg-white rounded-3xl">
@@ -496,7 +579,7 @@ const CourseBuilder: React.FC<CourseBuilderProps> = ({ initialCourse, onSave, on
                         <div className="p-6 bg-blue-50 border border-blue-100 rounded-2xl flex items-center justify-between">
                           <div>
                             <h4 className="font-bold text-blue-900">Video Asset Ready</h4>
-                            <p className="text-sm text-blue-700">This clip was generated using Veo Video Intelligence.</p>
+                            <p className="text-sm text-blue-700">This clip was generated using Veo Video Intelligence and auto-saved.</p>
                           </div>
                           <button 
                             onClick={() => generateLessonBody(selectedLesson!.moduleId, activeLesson.id)}
@@ -517,15 +600,26 @@ const CourseBuilder: React.FC<CourseBuilderProps> = ({ initialCourse, onSave, on
                     )}
                   </div>
                 ) : (
-                  <div className="min-h-[400px]">
+                  <div className="min-h-[400px] relative">
                     {activeLesson.content ? (
                       <div className="space-y-4">
-                        <textarea 
-                          value={activeLesson.content}
-                          onChange={(e) => updateLessonContent(selectedLesson!.moduleId, activeLesson.id, e.target.value)}
-                          className="w-full h-[400px] p-6 text-gray-700 font-mono text-sm bg-gray-50 border border-gray-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-100"
-                          placeholder="HTML content..."
-                        />
+                        <div className="relative">
+                          <textarea 
+                            value={activeLesson.content}
+                            onChange={(e) => updateLessonContent(selectedLesson!.moduleId, activeLesson.id, e.target.value)}
+                            className="w-full h-[400px] p-6 text-gray-700 font-mono text-sm bg-gray-50 border border-gray-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-100 transition-all"
+                            placeholder="HTML content..."
+                          />
+                          <button 
+                            onClick={() => handleVoiceInput('content')}
+                            className={`absolute bottom-4 right-4 w-12 h-12 rounded-full shadow-lg flex items-center justify-center transition-all ${
+                              isListening === 'content' ? 'bg-red-600 text-white animate-pulse scale-110' : 'bg-white text-gray-500 hover:text-blue-600'
+                            }`}
+                            title="Dictate content"
+                          >
+                            <i className="fas fa-microphone text-lg"></i>
+                          </button>
+                        </div>
                         <div className="p-8 border border-gray-100 rounded-2xl bg-white shadow-sm">
                           <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-4">Preview Rendering</h4>
                           <div className="prose prose-blue prose-lg max-w-none text-gray-700">
@@ -534,12 +628,21 @@ const CourseBuilder: React.FC<CourseBuilderProps> = ({ initialCourse, onSave, on
                         </div>
                       </div>
                     ) : (
-                      <div className="py-24 text-center border-2 border-dashed border-gray-200 rounded-3xl">
+                      <div className="py-24 text-center border-2 border-dashed border-gray-200 rounded-3xl relative">
                         <div className="w-16 h-16 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-4">
                           <i className="fas fa-feather-alt text-2xl"></i>
                         </div>
                         <h3 className="text-lg font-bold text-gray-900">Drafting Space</h3>
-                        <p className="text-gray-500 max-w-xs mx-auto">Click the sparkle icon next to the lesson title to write this lesson automatically.</p>
+                        <p className="text-gray-500 max-w-xs mx-auto">Click the sparkle icon next to the lesson title to write this lesson automatically, or use the microphone to dictate.</p>
+                        
+                        <button 
+                          onClick={() => handleVoiceInput('content')}
+                          className={`mt-6 mx-auto w-16 h-16 rounded-full shadow-xl flex items-center justify-center transition-all ${
+                            isListening === 'content' ? 'bg-red-600 text-white animate-pulse scale-110' : 'bg-white text-blue-600 hover:bg-gray-50'
+                          }`}
+                        >
+                          <i className="fas fa-microphone text-2xl"></i>
+                        </button>
                       </div>
                     )}
                   </div>
